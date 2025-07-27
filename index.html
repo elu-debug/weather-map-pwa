@@ -1,1 +1,273 @@
-PUT THE FULL INDEX.HTML FROM PREVIOUS ANSWER HERE
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Advanced Weather Map (PWA Ready)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      background: #f8f8f8;
+    }
+
+    #map {
+      flex: 3;
+      height: 100%;
+      width: 100%;
+    }
+
+    #right-panel {
+      flex: 1;
+      background: #fff;
+      box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+      padding: 15px;
+      overflow-y: auto;
+    }
+
+    .weather, .forecast {
+      background: #f0f0f0;
+      padding: 10px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+    }
+
+    .forecast {
+      font-size: 0.9em;
+    }
+
+    .wind-rose {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      border: 2px solid #ddd;
+      border-radius: 50%;
+      margin: 20px auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .center-dot {
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      background-color: black;
+      border-radius: 50%;
+      z-index: 10;
+    }
+
+    .cardinal {
+      position: absolute;
+      font-weight: bold;
+    }
+
+    .north { top: 5px; left: 50%; transform: translateX(-50%); }
+    .south { bottom: 5px; left: 50%; transform: translateX(-50%); }
+    .east { right: 5px; top: 50%; transform: translateY(-50%); }
+    .west { left: 5px; top: 50%; transform: translateY(-50%); }
+
+    .wind-arrow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100px;
+      height: 4px;
+      background-color: red;
+      transform-origin: 0% 50%;
+      transform: translate(-50%, -50%) rotate(0deg);
+    }
+
+    .wind-arrow::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-left: 10px solid red;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+    }
+
+    h2 {
+      margin-top: 0;
+      text-align: center;
+    }
+
+    #gpsStatus {
+      font-size: 0.9em;
+      color: #555;
+      text-align: center;
+      margin-top: 5px;
+    }
+
+    .forecast-day {
+      border-bottom: 1px solid #ccc;
+      padding: 5px 0;
+    }
+  </style>
+
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+
+  <div id="map"></div>
+
+  <div id="right-panel">
+    <h2>Vejret</h2>
+    <div id="gpsStatus">Finder din placering...</div>
+    <div id="weather" class="weather">Klik på et sted på kortet for at se vejret...</div>
+    <div class="wind-rose">
+      <div class="center-dot"></div>
+      <div class="cardinal north">N</div>
+      <div class="cardinal south">S</div>
+      <div class="cardinal east">Ø</div>
+      <div class="cardinal west">V</div>
+      <div id="wind-arrow" class="wind-arrow"></div>
+    </div>
+    <div id="forecast" class="forecast"></div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const apiKey = '4026be34041646fbd34bb6757ed62cbf';
+    const weatherContainer = document.getElementById('weather');
+    const forecastContainer = document.getElementById('forecast');
+    const windArrow = document.getElementById('wind-arrow');
+    const gpsStatus = document.getElementById('gpsStatus');
+
+    const locations = [
+      { name: "Frederiks Hus", lat: 56.150025, lon: 10.208920 },
+      { name: "Kildegaarden", lat: 56.1419128798903, lon: 10.206394355376503 },
+      { name: "Mejse Alle", lat: 57.24320743850639, lon: 9.577660774410994 },
+      { name: "Barcelona", lat: 41.38415425956017, lon: 2.180718635380675 },
+      { name: "Cabris", lat: 43.66151736688991, lon: 6.878785984577877 },
+      { name: "Chamonix", lat: 45.915285051732354, lon: 6.850161046453706 },
+      { name: "Riparbella", lat: 43.36798700553137, lon: 10.590644615613622 },
+      { name: "Mallorca", lat: 39.53419336140355, lon: 2.385081643404377 }
+    ];
+
+    const map = L.map('map').setView([56.150025, 10.208920], 6);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    const windLayer = L.layerGroup().addTo(map);
+
+    locations.forEach(loc => {
+      const marker = L.marker([loc.lat, loc.lon]).addTo(map)
+        .bindPopup(`${loc.name}`)
+        .on('click', () => {
+          fetchWeather(loc.lat, loc.lon, loc.name);
+        });
+    });
+
+    async function fetchWeather(lat, lon, name = "Valgt sted") {
+      const urlCurrent = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=da`;
+      const urlForecast = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=da`;
+      try {
+        const [currentRes, forecastRes] = await Promise.all([fetch(urlCurrent), fetch(urlForecast)]);
+        if (!currentRes.ok || !forecastRes.ok) throw new Error("Fejl i hentning af vejrdata");
+
+        const currentData = await currentRes.json();
+        const forecastData = await forecastRes.json();
+
+        displayWeather(currentData, name);
+        displayForecast(forecastData);
+        drawWindArrows(lat, lon);
+      } catch (error) {
+        weatherContainer.innerHTML = `<p class="error">${error.message}</p>`;
+      }
+    }
+
+    function displayWeather(data, name) {
+      const date = new Date();
+      const precipitation = data.rain ? data.rain['1h'] : data.snow ? data.snow['1h'] : 0;
+      const precipitationType = data.rain ? 'Regn' : data.snow ? 'Sne' : 'Ingen';
+      const sunrise = new Date(data.sys.sunrise * 1000).toLocaleTimeString();
+      const sunset = new Date(data.sys.sunset * 1000).toLocaleTimeString();
+
+      weatherContainer.innerHTML = `
+        <h3>${name} (${data.name})</h3>
+        <p><strong>Dato:</strong> ${date.toLocaleDateString()}</p>
+        <p><strong>Temperatur:</strong> ${Math.round(data.main.temp)}°C</p>
+        <p><strong>Vejr:</strong> ${data.weather[0].description}, skydække: ${data.clouds.all}%</p>
+        <p><strong>Nedbør:</strong> ${precipitation} mm (${precipitationType})</p>
+        <p><strong>Vind:</strong> ${Math.round(data.wind.speed)} m/s, retning: ${data.wind.deg}°</p>
+      `;
+      updateWindArrow(data.wind.speed, data.wind.deg);
+    }
+
+    function displayForecast(data) {
+      let html = `<h3>7-dages & 3-timers prognose</h3>`;
+      const daily = {};
+
+      data.list.forEach(entry => {
+        const date = new Date(entry.dt * 1000).toLocaleDateString();
+        if (!daily[date]) daily[date] = [];
+        daily[date].push(entry);
+      });
+
+      for (let date in daily) {
+        const dayData = daily[date][0];
+        html += `
+          <div class="forecast-day">
+            <strong>${date}</strong><br>
+            Temp: ${Math.round(dayData.main.temp)}°C, ${dayData.weather[0].description}, Vind: ${Math.round(dayData.wind.speed)} m/s
+          </div>
+        `;
+      }
+      forecastContainer.innerHTML = html;
+    }
+
+    function updateWindArrow(speed, direction) {
+      const arrowLength = Math.min(speed * 10, 100);
+      const correctedDirection = direction + 90;
+      windArrow.style.width = `${arrowLength}px`;
+      windArrow.style.transform = `translate(-50%, -50%) rotate(${correctedDirection}deg)`;
+    }
+
+    function drawWindArrows(lat, lon) {
+      windLayer.clearLayers();
+      for (let i = 0; i < 8; i++) {
+        const angle = i * 45;
+        const dx = 0.1 * Math.cos(angle * Math.PI / 180);
+        const dy = 0.1 * Math.sin(angle * Math.PI / 180);
+        const arrow = L.polyline([[lat, lon], [lat + dy, lon + dx]], { color: 'blue', weight: 2, opacity: 0.7 });
+        windLayer.addLayer(arrow);
+      }
+    }
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude, longitude } = pos.coords;
+        gpsStatus.textContent = `Din placering: Lat ${latitude.toFixed(2)}, Lon ${longitude.toFixed(2)}`;
+        map.setView([latitude, longitude], 10);
+        L.marker([latitude, longitude]).addTo(map).bindPopup("Din placering").openPopup();
+        fetchWeather(latitude, longitude, "Din placering");
+      }, () => gpsStatus.textContent = "Kunne ikke finde din placering.");
+    } else {
+      gpsStatus.textContent = "GPS ikke understøttet i din browser.";
+    }
+
+    fetchWeather(56.150025, 10.208920, "Frederiks Hus");
+
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js');
+    }
+  </script>
+</body>
+</html>
