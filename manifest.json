@@ -1,5 +1,4 @@
-{
-  "name": "Weather & Wind Map",
+ "name": "Weather & Wind Map",
   "short_name": "WeatherMap",
   "start_url": ".",
   "display": "standalone",
