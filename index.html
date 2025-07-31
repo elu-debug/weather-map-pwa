@@ -60,6 +60,7 @@
     .south { bottom: 5px; left: 50%; transform: translateX(-50%); }
     .east { right: 5px; top: 50%; transform: translateY(-50%); }
     .west { left: 5px; top: 50%; transform: translateY(-50%); }
+    
     .wind-arrow {
       position: absolute;
       top: 50%;
@@ -67,8 +68,8 @@
       width: 100px;
       height: 4px;
       background-color: red;
-      transform-origin: left center; /* FIXED */
-      transform: translate(0, -50%) rotate(0deg);
+      transform-origin: center center; /* FIXED */
+      transform: translate(-50%, -50%) rotate(0deg);
     }
     .wind-arrow::after {
       content: '';
@@ -126,10 +127,11 @@
 
     const locations = [
       { name: "Frederiks Hus", lat: 56.150025, lon: 10.208920 },
-      { name: "Kildegaarden", lat: 56.1419128798903, lon: 10.206394355376503 },
       { name: "Mejse Alle", lat: 57.24320743850639, lon: 9.577660774410994 },
+      { name: "John, Lene, Klitmøller", lat: 57.04128165946099, lon: 8.484009839491218 },
       { name: "Barcelona", lat: 41.38415425956017, lon: 2.180718635380675 },
       { name: "Cabris", lat: 43.66151736688991, lon: 6.878785984577877 },
+      { name: "Camp du Domaine", lat: 43.11759860043004, lon: 6.357196549703678 },
       { name: "Chamonix", lat: 45.915285051732354, lon: 6.850161046453706 },
       { name: "Riparbella", lat: 43.36798700553137, lon: 10.590644615613622 },
       { name: "Mallorca", lat: 39.53419336140355, lon: 2.385081643404377 }
@@ -195,10 +197,13 @@
     }
 
     function updateWindArrow(speed, direction) {
-      const arrowLength = Math.min(speed * 10, 100);
-      windArrow.style.width = `${arrowLength}px`;
-      windArrow.style.transform = `translate(0, -50%) rotate(${direction}deg)`;
-    }
+    const arrowLength = Math.min(speed * 10, 100);
+    const correctedDirection = ((direction + 180) % 360) - 90; // ✅ point FROM this direction
+    windArrow.style.width = `${arrowLength}px`;
+    windArrow.style.transform = `translate(-50%, -50%) rotate(${correctedDirection}deg)`;
+}
+
+
 
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(pos => {
